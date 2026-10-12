@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Jersey Engine Pro - True Contour Nesting</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#1a1a1c; color:#f2f2f7; padding:12px; margin:0; font-size:13px; }
+  h3 { color:#30d158; margin:0 0 10px; font-size:15px; border-bottom:1px solid #333; padding-bottom:6px; }
+  .control-group { margin-bottom:10px; }
+  label { display:block; font-size:11px; color:#aeaeb2; margin-bottom:4px; }
+  select { width:100%; padding:8px; background:#2c2c2e; border:1px solid #3a3a3c; color:#fff; border-radius:4px; font-size:13px; }
+  .action-btn { width:100%; background:#30d158; color:#111; border:none; padding:10px; font-weight:bold; border-radius:4px; cursor:pointer; margin-top:8px; font-size:13px; }
+  .action-btn:hover { background:#28b84e; }
+  .action-btn:disabled { opacity:.4; cursor:default; }
+  :focus-visible { outline:2px solid #30d158; outline-offset:2px; }
+  .console-output { background:#000; color:#30d158; font-family:monospace; padding:8px; border-radius:4px; max-height:200px; overflow-y:auto; font-size:11px; margin-top:10px; border:1px solid #222; white-space:pre-wrap; }
+  .piece-item { background:#222; border:1px solid #333; padding:6px; margin-top:4px; border-radius:3px; font-size:11px; }
+</style>
+</head>
+<body>
+ 
+<h3>True Contour Grid Nesting Engine</h3>
+ 
+<div class="control-group">
+  <label for="rollWidthSelect">Fabric Roll Width (ইঞ্চি):</label>
+  <select id="rollWidthSelect">
+    <option value="36">36 inches</option>
+    <option value="44">44 inches</option>
+    <option value="60">60 inches</option>
+    <option value="64">64 inches</option>
+  </select>
+</div>
+ 
+<div class="control-group">
+  <label for="bleedBuffer">Pattern Margin Clearance (ইঞ্চি):</label>
+  <select id="bleedBuffer">
+    <option value="0.25">0.25 inch</option>
+    <option value="0.5" selected>0.5 inch</option>
+  </select>
+</div>
+ 
+<button class="action-btn" id="runBtn" onclick="processTrueContourNesting()">Start Nesting Engine</button>
+ 
+<div id="pieceManifest"></div>
+<div class="console-output" id="terminalLog" role="status" aria-live="polite">Select the cut paths in Illustrator, then run.</div>
+ 
+<script>
+/* Nesting method: each piece is rasterized to a grid of CELL-inch squares (rounded outward, so masks
+   only ever overestimate), then slid top-left-first across the roll until its mask touches no cell
+   within the spacing of a placed piece. Smaller CELL = tighter nesting but slower. */
+var CELL = 0.25;        // grid resolution, inches
+var ROTATIONS = [0];    // degrees tried per piece, e.g. [0, 180]; every extra angle multiplies run time
+var SUB = [0.001, 0.5, 0.999];   // scanlines sampled per grid row
+ 
+function $(id) { return document.getElementById(id); }
+function log(msg) { var t = $('terminalLog'); t.textContent += '\n> ' + msg; t.scrollTop = t.scrollHeight; }
+function fail(msg) { log(msg); $('runBtn').disabled = false; }
+function jsx(code, cb) {
+  try {
+    window.__adobe_cep__.evalScript(code, cb);
+  } catch (e) {
+    cb('ERROR: ' + e.message);
+  }
+}
+
+function validateItems(items) {
+  var i, j, it, point;
+  if (!(items instanceof Array) || items.length === 0) { return 'Select at least one non-empty piece in Illustrator.'; }
+  for (i = 0; i < items.length; i++) {
+    it = items[i];
+    if (!it || typeof it.index !== 'number' || !isFinite(it.index) ||
+        !(it.hullGeometry instanceof Array) || it.hullGeometry.length < 3) {
+      return 'Invalid contour data for piece ' + (it && it.className ? it.className : (i + 1)) + '.';
+    }
+    for (j = 0; j < it.hullGeometry.length; j++) {
+      point = it.hullGeometry[j];
+      if (!point || !isFinite(point.x) || !isFinite(point.y)) {
+        return 'Invalid contour coordinates for piece ' + (it.className || (i + 1)) + '.';
+      }
+    }
+    if (polyArea(it.hullGeometry) <= 0) {
+      return 'Piece ' + (it.className || (i + 1)) + ' has no usable area.';
+    }
+  }
+  return null;
+}
+ 
+/* ---- geometry (points are {x, y} in inches, Y pointing down) ---- */
+function polyArea(p) {
+  var s = 0, i, j;
+  for (i = 0; i < p.length; i++) { j = (i + 1) % p.length; s += p[i].x * p[j].y - p[j].x * p[i].y; }
+  return Math.abs(s / 2);
+}
+ 
+// Standard matrix: with Y down, positive degrees turn clockwise on screen. Result is shifted to start at 0,0.
+function rotatePoly(poly, deg) {
+  var a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), out = [], minX = Infinity, minY = Infinity, i, x, y;
+  for (i = 0; i < poly.length; i++) {
+    x = poly[i].x * c - poly[i].y * s;
+    y = poly[i].x * s + poly[i].y * c;
+    out.push({ x: x, y: y });
+    minX = Math.min(minX, x); minY = Math.min(minY, y);
+  }
+  for (i = 0; i < out.length; i++) { out[i].x -= minX; out[i].y -= minY; }
+  return out;
+}
+ 
+// Polygon -> { mask: rows of [startCol, endCol) runs, mw: width in cells }
+function rasterize(poly) {
+  var n = poly.length, maxX = 0, maxY = 0, i, r, k, j, t, a, b, y, xs, c1, c2, flags, runs, s0, mask = [], mw = 0, wCells;
+  for (i = 0; i < n; i++) { maxX = Math.max(maxX, poly[i].x); maxY = Math.max(maxY, poly[i].y); }
+  wCells = Math.ceil(maxX / CELL) + 1;
+  for (r = 0; r < Math.max(1, Math.ceil(maxY / CELL)); r++) {
+    flags = new Uint8Array(wCells);
+    for (k = 0; k < SUB.length; k++) {
+      y = (r + SUB[k]) * CELL;
+      xs = [];
+      for (i = 0; i < n; i++) {
+        a = poly[i]; b = poly[(i + 1) % n];
+        if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) { xs.push(a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y)); }
+      }
+      xs.sort(function (p, q) { return p - q; });
+      for (j = 0; j + 1 < xs.length; j += 2) {          // even-odd fill, rounded outward
+        c1 = Math.floor(xs[j] / CELL);
+        c2 = Math.max(c1 + 1, Math.ceil(xs[j + 1] / CELL));
+        for (t = c1; t < c2 && t < wCells; t++) { flags[t] = 1; }
+      }
+    }
+    runs = []; t = 0;
+    while (t < wCells) {
+      if (flags[t]) { s0 = t; while (t < wCells && flags[t]) { t++; } runs.push([s0, t]); mw = Math.max(mw, t); }
+      else { t++; }
+    }
+    mask.push(runs);
+  }
+  return { mask: mask, mw: mw };
+}
+ 
+/* ---- occupancy grid: `blocked` rows are created on demand; a missing row is free ---- */
+function fits(mask, r0, c0, blocked) {
+  var r, k, c, row, runs;
+  for (r = 0; r < mask.length; r++) {
+    row = blocked[r0 + r];
+    if (!row) { continue; }
+    runs = mask[r];
+    for (k = 0; k < runs.length; k++) {
+      for (c = runs[k][0]; c < runs[k][1]; c++) { if (row[c0 + c]) { return false; } }
+    }
+  }
+  return true;
+}
+ 
+// Blocks every cell within `pad` cells of the placed piece.
+function stamp(mask, r0, c0, pad, blocked, cols) {
+  var r, k, c, dr, dc, rr, cc, row;
+  for (r = 0; r < mask.length; r++) {
+    for (k = 0; k < mask[r].length; k++) {
+      for (c = mask[r][k][0]; c < mask[r][k][1]; c++) {
+        for (dr = -pad; dr <= pad; dr++) {
+          rr = r0 + r + dr;
+          if (rr < 0) { continue; }
+          row = blocked[rr] || (blocked[rr] = new Uint8Array(cols));
+          for (dc = -pad; dc <= pad; dc++) { cc = c0 + c + dc; if (cc >= 0 && cc < cols) { row[cc] = 1; } }
+        }
+      }
+    }
+  }
+}
+ 
+// First free spot scanning top-to-bottom, left-to-right, keeping `pad` cells clear of the roll edges.
+function findSpot(m, cols, blocked, pad) {
+  var r0, c0;
+  for (r0 = pad; r0 <= blocked.length + pad; r0++) {
+    for (c0 = pad; c0 + m.mw <= cols - pad; c0++) {
+      if (fits(m.mask, r0, c0, blocked)) { return { r: r0, c: c0 }; }
+    }
+  }
+  return null;
+}
+ 
+// Places pieces largest-first, one per tick so the log keeps updating. cb(error, { spots, length, util }).
+function nest(items, rollW, padIn, cb) {
+  var cols = Math.floor(rollW / CELL), pad = Math.round(padIn / CELL), blocked = [], spots = [], maxRow = 0, areaSum = 0, i = 0;
+  items = items.slice().sort(function (a, b) { return polyArea(b.hullGeometry) - polyArea(a.hullGeometry); });
+ 
+  (function step() {
+    var it, best = null;
+    if (i >= items.length) {
+      var length = maxRow * CELL + padIn;
+      cb(null, { spots: spots, length: length, util: areaSum / (rollW * length) });
+      return;
+    }
+    it = items[i];
+    ROTATIONS.forEach(function (deg) {
+      var m = rasterize(rotatePoly(it.hullGeometry, deg)), spot = findSpot(m, cols, blocked, pad), score;
+      if (!spot) { return; }
+      score = (spot.r + m.mask.length) * 10000 + spot.c;      // prefer the lowest bottom edge, then the left
+      if (!best || score < best.score) { best = { deg: deg, m: m, spot: spot, score: score }; }
+    });
+    if (!best) { cb(it.className + ' does not fit the roll width. Choose a wider roll or less spacing.'); return; }
+ 
+    stamp(best.m.mask, best.spot.r, best.spot.c, pad, blocked, cols);
+    maxRow = Math.max(maxRow, best.spot.r + best.m.mask.length);
+    areaSum += polyArea(it.hullGeometry);
+    // Illustrator turns counterclockwise for positive angles, so send the negated angle.
+    spots.push({ index: it.index, name: it.className, x: best.spot.c * CELL, y: best.spot.r * CELL, rotation: -best.deg });
+    log('Nested ' + (i + 1) + ' of ' + items.length + ': ' + it.className);
+    i++;
+    setTimeout(step, 0);
+  }());
+}
+ 
+/* ---- Illustrator bridge ---- */
+function place(spots, i, cb) {
+  var s;
+  if (i >= spots.length) { cb(null); return; }
+  s = spots[i];
+  jsx('executeTruePlacement(' + s.index + ',' + s.x + ',' + s.y + ',' + s.rotation + ')', function (res) {
+    if (res !== 'SUCCESS') { cb('Placement failed for ' + s.name + ': ' + res + ' Undo in Illustrator to reset.'); return; }
+    place(spots, i + 1, cb);
+  });
+}
+ 
+function processTrueContourNesting() {
+  var rollW = parseFloat($('rollWidthSelect').value), padIn = parseFloat($('bleedBuffer').value);
+  if ($('runBtn').disabled) { return; }
+  $('pieceManifest').textContent = '';
+  $('terminalLog').textContent = 'Reading selection…';
+  if (!window.__adobe_cep__ || typeof window.__adobe_cep__.evalScript !== 'function') { log('Open this panel inside Illustrator.'); return; }
+  $('runBtn').disabled = true;
+ 
+  jsx('getJerseyComplexVectorData()', function (res) {
+    var items, invalid;
+    if (typeof res !== 'string' || !res || res === 'undefined') { fail('No valid reply from Illustrator. Check that core.jsx is loaded by the extension manifest.'); return; }
+    if (res === 'EvalScript error.') { fail('Illustrator could not run core.jsx. Check that the manifest lists it as ScriptPath.'); return; }
+    if (res.indexOf('ERROR:') === 0) { fail(res); return; }
+    try { items = JSON.parse(res); } catch (e) { fail('Could not read the reply from Illustrator: ' + e.message); return; }
+    invalid = validateItems(items);
+    if (invalid) { fail(invalid); return; }
+ 
+    log(items.length + ' pieces read.');
+    items.forEach(function (it) {
+      var el = document.createElement('div');
+      el.className = 'piece-item';
+      el.textContent = it.className + ' (' + it.width + ' x ' + it.height + ' in), ' + ((it.contourType === 'TRUE_CONTOUR' || it.contour === 'path') ? 'true shape' : 'bounding box only');
+      $('pieceManifest').appendChild(el);
+    });
+ 
+    try {
+      nest(items, rollW, padIn, function (err, r) {
+        if (err) { fail(err); return; }
+        log('Placing ' + r.spots.length + ' pieces in Illustrator…');
+        place(r.spots, 0, function (msg) {
+          if (msg) { fail(msg); return; }
+          log('Done. Roll length used: ' + r.length.toFixed(1) + ' in. Pieces cover ' + Math.round(r.util * 100) + '% of that area.');
+          $('runBtn').disabled = false;
+        });
+      });
+    } catch (e) { fail('Nesting failed: ' + e.message); }
+  });
+}
+</script>
+</body>
+</html>
+ 
