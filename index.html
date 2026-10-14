@@ -63,26 +63,41 @@ function jsx(code, cb) {
   }
 }
 
+function isArrayValue(value) {
+  return Object.prototype.toString.call(value) === '[object Array]';
+}
+
 function pointX(point) {
-  return Array.isArray(point) ? Number(point[0]) : Number(point.x);
+  return isArrayValue(point) ? point[0] : (point && point.x);
 }
 
 function pointY(point) {
-  return Array.isArray(point) ? Number(point[1]) : Number(point.y);
+  return isArrayValue(point) ? point[1] : (point && point.y);
+}
+
+function isFinitePoint(point) {
+  var x, y;
+  if (isArrayValue(point)) {
+    if (point.length !== 2) { return false; }
+  } else if (!point || typeof point !== 'object') {
+    return false;
+  }
+  x = pointX(point);
+  y = pointY(point);
+  return typeof x === 'number' && isFinite(x) && typeof y === 'number' && isFinite(y);
 }
 
 function validateItems(items) {
-  var i, j, it, point;
-  if (!Array.isArray(items) || items.length === 0) { return 'Select at least one non-empty piece in Illustrator.'; }
+  var i, j, it;
+  if (!isArrayValue(items) || items.length === 0) { return 'Select at least one non-empty piece in Illustrator.'; }
   for (i = 0; i < items.length; i++) {
     it = items[i];
     if (!it || typeof it.index !== 'number' || !isFinite(it.index) ||
-        !Array.isArray(it.hullGeometry) || it.hullGeometry.length < 3) {
+        !isArrayValue(it.hullGeometry) || it.hullGeometry.length < 3) {
       return 'Invalid contour data for piece ' + (it && it.className ? it.className : (i + 1)) + '.';
     }
     for (j = 0; j < it.hullGeometry.length; j++) {
-      point = it.hullGeometry[j];
-      if (!point || !isFinite(pointX(point)) || !isFinite(pointY(point))) {
+      if (!isFinitePoint(it.hullGeometry[j])) {
         return 'Invalid contour coordinates for piece ' + (it.className || (i + 1)) + '.';
       }
     }
