@@ -30,7 +30,7 @@ if (typeof JSON.stringify !== 'function') {   // never overwrite a native one
             if (t === 'number') return isFinite(v) ? String(v) : 'null';
             if (t === 'boolean') return String(v);
             if (t === 'string') return quote(v);
-            if (v instanceof Array) {
+            if (Array.isArray(v)) {
                 for (i = 0; i < v.length; i++) out.push(ser(v[i]));
                 return '[' + out.join(',') + ']';
             }

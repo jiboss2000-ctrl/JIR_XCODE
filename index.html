@@ -63,18 +63,26 @@ function jsx(code, cb) {
   }
 }
 
+function pointX(point) {
+  return Array.isArray(point) ? Number(point[0]) : Number(point.x);
+}
+
+function pointY(point) {
+  return Array.isArray(point) ? Number(point[1]) : Number(point.y);
+}
+
 function validateItems(items) {
   var i, j, it, point;
-  if (!(items instanceof Array) || items.length === 0) { return 'Select at least one non-empty piece in Illustrator.'; }
+  if (!Array.isArray(items) || items.length === 0) { return 'Select at least one non-empty piece in Illustrator.'; }
   for (i = 0; i < items.length; i++) {
     it = items[i];
     if (!it || typeof it.index !== 'number' || !isFinite(it.index) ||
-        !(it.hullGeometry instanceof Array) || it.hullGeometry.length < 3) {
+        !Array.isArray(it.hullGeometry) || it.hullGeometry.length < 3) {
       return 'Invalid contour data for piece ' + (it && it.className ? it.className : (i + 1)) + '.';
     }
     for (j = 0; j < it.hullGeometry.length; j++) {
       point = it.hullGeometry[j];
-      if (!point || !isFinite(point.x) || !isFinite(point.y)) {
+      if (!point || !isFinite(pointX(point)) || !isFinite(pointY(point))) {
         return 'Invalid contour coordinates for piece ' + (it.className || (i + 1)) + '.';
       }
     }
@@ -85,19 +93,24 @@ function validateItems(items) {
   return null;
 }
  
-/* ---- geometry (points are {x, y} in inches, Y pointing down) ---- */
+/* ---- geometry (points are {x, y} or [x, y] in inches, Y pointing down) ---- */
 function polyArea(p) {
-  var s = 0, i, j;
-  for (i = 0; i < p.length; i++) { j = (i + 1) % p.length; s += p[i].x * p[j].y - p[j].x * p[i].y; }
+  var s = 0, i, j, a, b;
+  for (i = 0; i < p.length; i++) {
+    j = (i + 1) % p.length;
+    a = p[i]; b = p[j];
+    s += pointX(a) * pointY(b) - pointX(b) * pointY(a);
+  }
   return Math.abs(s / 2);
 }
  
 // Standard matrix: with Y down, positive degrees turn clockwise on screen. Result is shifted to start at 0,0.
 function rotatePoly(poly, deg) {
-  var a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), out = [], minX = Infinity, minY = Infinity, i, x, y;
+  var a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), out = [], minX = Infinity, minY = Infinity, i, x, y, px, py;
   for (i = 0; i < poly.length; i++) {
-    x = poly[i].x * c - poly[i].y * s;
-    y = poly[i].x * s + poly[i].y * c;
+    px = pointX(poly[i]); py = pointY(poly[i]);
+    x = px * c - py * s;
+    y = px * s + py * c;
     out.push({ x: x, y: y });
     minX = Math.min(minX, x); minY = Math.min(minY, y);
   }
@@ -107,8 +120,11 @@ function rotatePoly(poly, deg) {
  
 // Polygon -> { mask: rows of [startCol, endCol) runs, mw: width in cells }
 function rasterize(poly) {
-  var n = poly.length, maxX = 0, maxY = 0, i, r, k, j, t, a, b, y, xs, c1, c2, flags, runs, s0, mask = [], mw = 0, wCells;
-  for (i = 0; i < n; i++) { maxX = Math.max(maxX, poly[i].x); maxY = Math.max(maxY, poly[i].y); }
+  var n = poly.length, maxX = 0, maxY = 0, i, r, k, j, t, a, b, y, xs, c1, c2, flags, runs, s0, mask = [], mw = 0, wCells, ax, ay, bx, by;
+  for (i = 0; i < n; i++) {
+    ax = pointX(poly[i]); ay = pointY(poly[i]);
+    maxX = Math.max(maxX, ax); maxY = Math.max(maxY, ay);
+  }
   wCells = Math.ceil(maxX / CELL) + 1;
   for (r = 0; r < Math.max(1, Math.ceil(maxY / CELL)); r++) {
     flags = new Uint8Array(wCells);
@@ -117,7 +133,8 @@ function rasterize(poly) {
       xs = [];
       for (i = 0; i < n; i++) {
         a = poly[i]; b = poly[(i + 1) % n];
-        if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) { xs.push(a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y)); }
+        ax = pointX(a); ay = pointY(a); bx = pointX(b); by = pointY(b);
+        if ((ay <= y && by > y) || (by <= y && ay > y)) { xs.push(ax + (y - ay) * (bx - ax) / (by - ay)); }
       }
       xs.sort(function (p, q) { return p - q; });
       for (j = 0; j + 1 < xs.length; j += 2) {          // even-odd fill, rounded outward
