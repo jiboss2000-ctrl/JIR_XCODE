@@ -29,6 +29,8 @@ jobs:
           cp index.html "$root/index.html"
           cp core.jsx "$root/core.jsx"
           cp CSXS/manifest.xml "$root/CSXS/manifest.xml"
+          cp install.sh "$root/install.sh"
+          cp README.md "$root/README.md"
 
           python3 - <<'PY'
           import re
@@ -86,11 +88,16 @@ jobs:
               "JerseyEnginePro/index.html",
               "JerseyEnginePro/core.jsx",
               "JerseyEnginePro/CSXS/manifest.xml",
+              "JerseyEnginePro/install.sh",
+              "JerseyEnginePro/README.md",
           }
           with ZipFile("JerseyEnginePro.zip") as archive:
               missing = required.difference(archive.namelist())
+              install_mode = archive.getinfo("JerseyEnginePro/install.sh").external_attr >> 16
           if missing:
               raise SystemExit(f"Package is missing required files: {sorted(missing)}")
+          if not install_mode & 0o111:
+              raise SystemExit("Packaged install.sh is not executable.")
           print("Extension archive validation passed.")
           PY
 
