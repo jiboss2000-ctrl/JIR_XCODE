@@ -1,0 +1,103 @@
+name: Validate and package CEP extension
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Validate and package extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+
+      - name: Assemble and validate extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="build/JerseyEnginePro"
+          mkdir -p "$root/CSXS"
+          cp index.html "$root/index.html"
+          cp core.jsx "$root/core.jsx"
+          cp CSXS/manifest.xml "$root/CSXS/manifest.xml"
+
+          python3 - <<'PY'
+          import re
+          import xml.etree.ElementTree as ET
+          from pathlib import Path, PureWindowsPath
+
+          root = Path("build/JerseyEnginePro").resolve()
+          required_files = ("index.html", "core.jsx", "CSXS/manifest.xml")
+          for relative_path in required_files:
+              candidate = root / relative_path
+              if not candidate.is_file():
+                  raise SystemExit(f"Missing required extension file: {relative_path}")
+
+          source = (root / "core.jsx").read_text(encoding="utf-8")
+          if re.search(r"\bvar\s+ROTATIONS\s*=\s*;", source):
+              raise SystemExit("Invalid panel script: ROTATIONS has no value.")
+
+          manifest = ET.parse(root / "CSXS/manifest.xml").getroot()
+          for tag in ("MainPath", "ScriptPath"):
+              elements = [
+                  element
+                  for element in manifest.iter()
+                  if element.tag.rsplit("}", 1)[-1] == tag
+              ]
+              if len(elements) != 1 or not (elements[0].text or "").strip():
+                  raise SystemExit(f"Manifest must contain exactly one non-empty {tag}.")
+
+              value = elements[0].text.strip()
+              if Path(value).is_absolute() or PureWindowsPath(value).is_absolute():
+                  raise SystemExit(f"Absolute manifest path is not allowed for {tag}: {value}")
+
+              candidate = (root / value.replace("\\", "/")).resolve()
+              try:
+                  candidate.relative_to(root)
+              except ValueError:
+                  raise SystemExit(f"Manifest path escapes the extension folder for {tag}: {value}")
+              if not candidate.is_file():
+                  raise SystemExit(f"Manifest target does not exist for {tag}: {value}")
+
+          print("Extension source and manifest validation passed.")
+          PY
+
+      - name: Package extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd build
+          zip -qr ../JerseyEnginePro.zip JerseyEnginePro
+          cd ..
+          unzip -l JerseyEnginePro.zip
+          python3 - <<'PY'
+          from zipfile import ZipFile
+
+          required = {
+              "JerseyEnginePro/index.html",
+              "JerseyEnginePro/core.jsx",
+              "JerseyEnginePro/CSXS/manifest.xml",
+          }
+          with ZipFile("JerseyEnginePro.zip") as archive:
+              missing = required.difference(archive.namelist())
+          if missing:
+              raise SystemExit(f"Package is missing required files: {sorted(missing)}")
+          print("Extension archive validation passed.")
+          PY
+
+      - name: Upload installable extension
+        uses: actions/upload-artifact@v7
+        with:
+          name: JerseyEnginePro-ci
+          path: JerseyEnginePro.zip
+          if-no-files-found: error
+          retention-days: 7
