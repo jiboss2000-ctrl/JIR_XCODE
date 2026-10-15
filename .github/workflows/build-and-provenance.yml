@@ -1,0 +1,133 @@
+name: Build extension and SLSA provenance
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build extension package
+    runs-on: ubuntu-latest
+    outputs:
+      hashes: ${{ steps.hashes.outputs.hashes }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+
+      - name: Assemble the extension folder
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build
+          mkdir -p build/JerseyEnginePro/CSXS
+          cp index.html build/JerseyEnginePro/index.html
+          cp core.jsx build/JerseyEnginePro/core.jsx
+          cp CSXS/manifest.xml build/JerseyEnginePro/CSXS/manifest.xml
+
+      - name: Validate extension contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path('build/JerseyEnginePro').resolve()
+          for rel in ['index.html', 'core.jsx', 'CSXS/manifest.xml']:
+              candidate = root / rel
+              if not candidate.exists():
+                  raise SystemExit(f'Missing required file: {candidate}')
+
+          source = (root / 'core.jsx').read_text(encoding='utf-8', errors='replace')
+          if 'var ROTATIONS =;' in source:
+              raise SystemExit('Invalid panel script: var ROTATIONS =; was detected.')
+
+          manifest = (root / 'CSXS' / 'manifest.xml').read_text(encoding='utf-8', errors='replace')
+          for tag in ('MainPath', 'ScriptPath'):
+              match = re.search(rf'<{tag}>(.*?)</{tag}>', manifest, re.DOTALL)
+              if not match:
+                  raise SystemExit(f'Manifest is missing {tag}.')
+
+              value = match.group(1).strip()
+              if Path(value).is_absolute():
+                  raise SystemExit(f'Absolute path is not allowed for {tag}: {value}')
+
+              candidate = (root / value).resolve()
+              try:
+                  candidate.relative_to(root)
+              except ValueError:
+                  raise SystemExit(f'Path escapes the extension root for {tag}: {value}')
+              if not candidate.is_file():
+                  raise SystemExit(f'Manifest path does not exist for {tag}: {value}')
+
+          print('Extension validation passed.')
+          PY
+
+      - name: Package extension zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd build
+          zip -qr ../JerseyEnginePro.zip JerseyEnginePro
+          cd ..
+          ls -lh JerseyEnginePro.zip
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: JerseyEnginePro-zip
+          path: JerseyEnginePro.zip
+          if-no-files-found: error
+
+      - name: Generate base64 subject hashes
+        id: hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'hashes=%s\n' "$(sha256sum JerseyEnginePro.zip | awk '{print $1}' | xxd -r -p | base64 | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
+  provenance:
+    name: Generate SLSA provenance
+    needs: build
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.build.outputs.hashes }}
+      upload-assets: true
+      provenance-name: JerseyEnginePro.intoto.jsonl
+
+  release-assets:
+    name: Attach assets to release
+    needs:
+      - build
+      - provenance
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all workflow artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          pattern: '*'
+          merge-multiple: false
+
+      - name: Attach zip and provenance to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/JerseyEnginePro.zip
+            artifacts/**/*.intoto.jsonl
