@@ -1,0 +1,61 @@
+---
+- name: Deploy VS Code settings
+  hosts: all
+  become: yes
+
+  vars:
+    FONT_FAMILY: "Monaco"
+    FONT_SIZE: 12
+    FONT_WEIGHT: "normal"
+    THEME_NAME: "monokai"
+    THEME_COLORS:
+      - "#2B2B2B"
+      - "#F8F8F2"
+    EXTENSIONS:
+      - "ms-python.python"
+      - "vscjava.vscode-java-pack"
+
+  tasks:
+    - name: Ensure .vscode directory exists
+      file:
+        path: "{{ ansible_env.HOME }}/.vscode"
+        state: directory
+        mode: '0755'
+
+    - name: Deploy VS Code settings (rendered from template)
+      template:
+        src: templates/vscode-settings.j2
+        dest: "{{ ansible_env.HOME }}/.vscode/settings.json"
+        mode: '0644'
+      vars:
+        env:
+          FONT_FAMILY: "{{ lookup('env','FONT_FAMILY') | default(FONT_FAMILY) }}"
+          FONT_SIZE: "{{ lookup('env','FONT_SIZE') | default(FONT_SIZE) }}"
+          FONT_WEIGHT: "{{ lookup('env','FONT_WEIGHT') | default(FONT_WEIGHT) }}"
+          THEME_NAME: "{{ lookup('env','THEME_NAME') | default(THEME_NAME) }}"
+          THEME_COLORS: {{ lookup('env','THEME_COLORS') | default(THEME_COLORS) }}
+          CODE_STYLE_MAX_LINE_LENGTH: "{{ lookup('env','CODE_STYLE_MAX_LINE_LENGTH') | default(120) }}"
+          CODE_STYLE_NEWLINE: "{{ lookup('env','CODE_STYLE_NEWLINE') | default('\\n') }}"
+          CODE_STYLE_INDENTATION: "{{ lookup('env','CODE_STYLE_INDENTATION') | default(2) }}"
+
+    - name: Deploy recommended extensions file
+      copy:
+        dest: "{{ ansible_env.HOME }}/.vscode/extensions.json"
+        content: |
+          {
+            "recommendations": [
+              "ms-python.python",
+              "vscjava.vscode-java-pack"
+            ]
+          }
+        mode: '0644'
+
+    - name: Install recommended VS Code extensions if the CLI is available
+      become: no
+      shell: |
+        if command -v code >/dev/null 2>&1; then
+          code --install-extension ms-python.python || true
+          code --install-extension vscjava.vscode-java-pack || true
+        fi
+      args:
+        executable: /bin/bash

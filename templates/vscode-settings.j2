@@ -1,0 +1,14 @@
+{
+  "editor.fontFamily": "{{ env.FONT_FAMILY | default('Monaco') }}",
+  "editor.fontSize": {{ env.FONT_SIZE | default(12) }},
+  "editor.fontWeight": "{{ env.FONT_WEIGHT | default('normal') }}",
+  "workbench.colorTheme": "{{ env.THEME_NAME | default('monokai') }}",
+  "workbench.colorCustomizations": {
+    "editor.background": "{{ env.THEME_COLORS[0] | default('#2B2B2B') }}",
+    "editor.foreground": "{{ env.THEME_COLORS[1] | default('#F8F8F2') }}"
+  },
+  "editor.rulers": [{{ env.CODE_STYLE_MAX_LINE_LENGTH | default(120) }}],
+  "files.eol": "{{ env.CODE_STYLE_NEWLINE | default('\\n') }}",
+  "editor.tabSize": {{ env.CODE_STYLE_INDENTATION | default(2) }},
+  "editor.insertSpaces": true
+}

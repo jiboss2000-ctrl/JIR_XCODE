@@ -1,0 +1,11 @@
+{
+  "editor.fontFamily": "Monaco",
+  "editor.fontSize": 12,
+  "editor.fontWeight": "normal",
+  "workbench.colorTheme": "monokai",
+  "editor.rulers": [120],
+  "files.eol": "\n",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.wordWrap": "off"
+}
