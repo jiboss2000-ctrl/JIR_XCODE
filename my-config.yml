@@ -1,25 +1,99 @@
----
-# JIR_XCODE configuration (managed file)
-# Versioned and intended to be deployed using Ansible (see ansible/ directory)
-name: JIR Xcode Config
+name: My Config
 version: 1.0.0
 schema: v1
 
+# Models
 models:
   - title: DeepSeek Coder (Chat)
     provider: ollama
     model: deepseek-coder
 
+  - title: DeepSeek Coder (Autocomplete)
+    provider: ollama
+    model: deepseek-coder
+
+# Tab Autocomplete Model
 tabAutocompleteModel:
   title: DeepSeek Coder (Autocomplete)
   provider: ollama
   model: deepseek-coder
 
+# Custom Commands
 customCommands:
   - name: test
     prompt: Write a comprehensive suite of unit tests for this code following international best practices.
+
   - name: refactor
     prompt: Refactor this code to ensure it is clean, highly optimized, maintainable, and follows global industry standards.
 
-systemMessage: >-
-  You are an elite senior software engineer. Always write clean, secure, scalable, and production-ready code with proper error handling, following international development standards.
+# System Message
+systemMessage: You are an elite senior software engineer. Always write clean, secure, scalable, and production-ready code with proper error handling, following international development standards.
+
+# Language
+language:
+  default: en
+  supported:
+    - en
+    - es
+    - fr
+    - de
+    - it
+    - pt
+    - ru
+    - zh
+    - ar
+    - he
+
+# Date Format
+dateFormat:
+  default: yyyy-mm-dd
+  supported:
+    - yyyy-mm-dd
+    - dd/mm/yyyy
+    - mm/dd/yyyy
+
+# Currency
+currency:
+  default: USD
+  supported:
+    - USD
+    - EUR
+    - JPY
+    - CNY
+    - GBP
+    - AUD
+    - CAD
+    - CHF
+    - NZD
+
+# Code Style
+codeStyle:
+  indentation: 2
+  newline: LF
+  maxLineLength: 120
+  codingStyleGuide: "https://google.github.io/styleguide/javaguide.html"
+
+# Code Quality
+codeQuality:
+  maxComplexity: 10
+  maxDepth: 5
+  maxNesting: 3
+  cyclomaticComplexity: true
+  codeCoverage: 80
+
+# Code Security
+codeSecurity:
+  enableSecurityChecks: true
+  sqlInjectionCheck: true
+  crossSiteScriptingCheck: true
+  OWASPTop10: true
+
+# Code Scalability
+codeScalability:
+  enableScalabilityChecks: true
+  performanceOptimization: true
+  errorHandling: true
+  scalabilityMetrics:
+    - responseTime
+    - throughput
+    - latency
