@@ -1,19 +1,38 @@
-# Jersey Engine Pro for Adobe Illustrator
+# JIR_XCODE — README
 
-## Install the unpacked panel on macOS
+This repository contains VS Code configuration and deployment examples for JIR_XCODE.
 
-This panel uses Adobe's CEP extension format. From this folder, run:
+Contents:
+- .vscode/settings.json — opinionated VS Code settings (editor font, theme, formatting rules).
+- .vscode/extensions.json — recommended extensions for the workspace.
+- templates/vscode-settings.j2 — Jinja2 template for settings.json; supports environment-driven values ({{ env.VAR }}).
+- ansible/deploy-vscode.yml — Ansible playbook to deploy the rendered settings to user home directory.
+- terraform/main.tf — Terraform example that demonstrates provisioning and remote execution (template placeholder).
+- scripts/deploy.sh — Simple helper script to render the template locally using envsubst as a convenience.
 
-```sh
-./install.sh
-```
+Quick start — local render (no secrets required):
+1. Render template using the helper script:
+   ./scripts/deploy.sh templates/vscode-settings.j2
+   This will create $HOME/.vscode/settings.json with sensible defaults.
 
-The installer copies the panel to `~/Library/Application Support/Adobe/CEP/extensions/com.jerseyengine.pro` and enables unsigned CEP extensions for CSXS.12, the runtime used by the installed Illustrator 2026 application. Restart Illustrator, then choose **Window > Extensions (Legacy) > Jersey Engine Pro Nesting**.
+Deployment to a remote host (production):
+- We do NOT store secrets or production tokens in this repo. For production, set required secrets as environment variables or use your platform's secret store (GitHub Secrets, HashiCorp Vault, AWS Secrets Manager, etc.).
 
-Select the jersey pieces in Illustrator before starting nesting. If Illustrator is already open, close and restart it after installation so it discovers the panel.
+Ansible example (recommended):
+- Use Ansible vault or environment variables to supply secrets at runtime.
+- Example to run locally (renders with environment variables if set):
+  FONT_FAMILY="Fira Code" THEME_NAME="Monokai" ansible-playbook -i localhost, -c local ansible/deploy-vscode.yml
 
-## Troubleshooting
+GitHub Actions / CI:
+- Create the following repository secrets (Settings → Secrets) before enabling CI workflows:
+  - SSH_PRIVATE_KEY: private key for SSH connections (sensitive)
+  - DEPLOY_TOKEN: token for deployment operations (sensitive)
 
-Do not run `core.jsx` with Node.js or VS Code's **Run Code** command. It uses Illustrator's ExtendScript APIs and is loaded by the CEP panel through Illustrator. A Node error such as `Cannot find module '.../vscode.git.Git.log'` is from a Node/VS Code launch target, not from this extension's host script. Stop that Node launch, restart Illustrator, and open **Window > Extensions (Legacy) > Jersey Engine Pro Nesting**.
+Security notes:
+- Never commit private keys, tokens, or other secrets to the repository.
+- Use native secret stores (GitHub Secrets, Vault) and Ansible Vault for production secrets.
 
-If the panel does not appear, run `./install.sh` again, then fully quit and reopen Illustrator.
+If you want, I can:
+- Wire up a GitHub Actions workflow that deploys to your host using secrets (requires the SSH_PRIVATE_KEY and DEPLOY_TOKEN secrets to be configured).
+- Configure Terraform to read SSH private key from a secure source instead of in-repo defaults.
+

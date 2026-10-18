@@ -1,14 +1,23 @@
 {
-  "editor.fontFamily": "{{ env.FONT_FAMILY | default('Monaco') }}",
+  "editor.fontFamily": "{{ env.FONT_FAMILY | default('Fira Code, Monaco, Menlo, \"Courier New\", monospace') }}",
   "editor.fontSize": {{ env.FONT_SIZE | default(12) }},
   "editor.fontWeight": "{{ env.FONT_WEIGHT | default('normal') }}",
-  "workbench.colorTheme": "{{ env.THEME_NAME | default('monokai') }}",
+  "workbench.colorTheme": "{{ env.THEME_NAME | default('Monokai') }}",
   "workbench.colorCustomizations": {
     "editor.background": "{{ env.THEME_COLORS[0] | default('#2B2B2B') }}",
     "editor.foreground": "{{ env.THEME_COLORS[1] | default('#F8F8F2') }}"
   },
+  "extensions.recommendations": [
+    "{{ env.EXTENSION_1 | default('ms-python.python') }}",
+    "{{ env.EXTENSION_2 | default('vscjava.vscode-java-pack') }}",
+    "{{ env.EXTENSION_3 | default('esbenp.prettier-vscode') }}",
+    "{{ env.EXTENSION_4 | default('dbaeumer.vscode-eslint') }}",
+    "{{ env.EXTENSION_5 | default('eamodio.gitlens') }}",
+    "{{ env.EXTENSION_6 | default('ms-azuretools.vscode-docker') }}"
+  ],
   "editor.rulers": [{{ env.CODE_STYLE_MAX_LINE_LENGTH | default(120) }}],
   "files.eol": "{{ env.CODE_STYLE_NEWLINE | default('\n') }}",
   "editor.tabSize": {{ env.CODE_STYLE_INDENTATION | default(2) }},
-  "editor.insertSpaces": true
+  "editor.insertSpaces": true,
+  "editor.fontLigatures": {{ env.EDITOR_FONT_LIGATURES | default(true) | lower }}
 }

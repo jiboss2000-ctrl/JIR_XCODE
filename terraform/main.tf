@@ -1,6 +1,7 @@
 variable "deploy_target" {
   description = "Target host to deploy to (ssh)"
   type        = string
+  default     = "prod.example.com"
 }
 
 variable "deploy_branch" {
@@ -13,6 +14,13 @@ variable "deploy_token" {
   description = "Deployment token (sensitive)"
   type        = string
   sensitive   = true
+}
+
+variable "ssh_private_key" {
+  description = "SSH private key for connecting to the deploy target (sensitive)"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 resource "null_resource" "deploy_vscode_settings" {
@@ -37,6 +45,8 @@ resource "null_resource" "deploy_vscode_settings" {
   connection {
     type        = "ssh"
     host        = var.deploy_target
-    user        = "${var.deploy_token != "" ? "ubuntu" : "your_username"}"
+    user        = "ubuntu"
+    # For real use: provide private_key or agent forwarding via the connection block
+    # private_key = var.ssh_private_key
   }
 }

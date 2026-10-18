@@ -1,11 +1,12 @@
 {
-  "editor.fontFamily": "Monaco",
+  "editor.fontFamily": "Fira Code, Monaco, Menlo, 'Courier New', monospace",
   "editor.fontSize": 12,
   "editor.fontWeight": "normal",
-  "workbench.colorTheme": "monokai",
+  "workbench.colorTheme": "Monokai",
   "editor.rulers": [120],
   "files.eol": "\n",
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
-  "editor.wordWrap": "off"
+  "editor.wordWrap": "off",
+  "editor.fontLigatures": true
 }

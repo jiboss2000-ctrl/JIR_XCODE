@@ -1,6 +1,10 @@
 {
   "recommendations": [
     "ms-python.python",
-    "vscjava.vscode-java-pack"
+    "vscjava.vscode-java-pack",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "eamodio.gitlens",
+    "ms-azuretools.vscode-docker"
   ]
 }

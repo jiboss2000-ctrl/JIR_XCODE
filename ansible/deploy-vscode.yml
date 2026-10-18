@@ -4,16 +4,23 @@
   become: yes
 
   vars:
-    FONT_FAMILY: "Monaco"
+    # Defaults (override via environment or extra-vars)
+    FONT_FAMILY: "Fira Code, Monaco, Menlo, 'Courier New', monospace"
     FONT_SIZE: 12
     FONT_WEIGHT: "normal"
-    THEME_NAME: "monokai"
+    THEME_NAME: "Monokai"
     THEME_COLORS:
       - "#2B2B2B"
       - "#F8F8F2"
     EXTENSIONS:
       - "ms-python.python"
       - "vscjava.vscode-java-pack"
+      - "esbenp.prettier-vscode"
+      - "dbaeumer.vscode-eslint"
+      - "eamodio.gitlens"
+      - "ms-azuretools.vscode-docker"
+    # Deployment target host (set this to your production host)
+    DEPLOY_TARGET: "prod.example.com"
 
   tasks:
     - name: Ensure .vscode directory exists
@@ -34,6 +41,12 @@
           FONT_WEIGHT: "{{ lookup('env','FONT_WEIGHT') | default(FONT_WEIGHT) }}"
           THEME_NAME: "{{ lookup('env','THEME_NAME') | default(THEME_NAME) }}"
           THEME_COLORS: {{ lookup('env','THEME_COLORS') | default(THEME_COLORS) }}
+          EXTENSION_1: "{{ lookup('env','EXTENSION_1') | default(EXTENSIONS[0]) }}"
+          EXTENSION_2: "{{ lookup('env','EXTENSION_2') | default(EXTENSIONS[1]) }}"
+          EXTENSION_3: "{{ lookup('env','EXTENSION_3') | default(EXTENSIONS[2]) }}"
+          EXTENSION_4: "{{ lookup('env','EXTENSION_4') | default(EXTENSIONS[3]) }}"
+          EXTENSION_5: "{{ lookup('env','EXTENSION_5') | default(EXTENSIONS[4]) }}"
+          EXTENSION_6: "{{ lookup('env','EXTENSION_6') | default(EXTENSIONS[5]) }}"
 
     - name: Deploy recommended extensions file
       copy:
@@ -42,7 +55,11 @@
           {
             "recommendations": [
               "ms-python.python",
-              "vscjava.vscode-java-pack"
+              "vscjava.vscode-java-pack",
+              "esbenp.prettier-vscode",
+              "dbaeumer.vscode-eslint",
+              "eamodio.gitlens",
+              "ms-azuretools.vscode-docker"
             ]
           }
         mode: '0644'
@@ -51,8 +68,17 @@
       become: no
       shell: |
         if command -v code >/dev/null 2>&1; then
-          code --install-extension ms-python.python || true
-          code --install-extension vscjava.vscode-java-pack || true
+          for ext in ms-python.python vscjava.vscode-java-pack esbenp.prettier-vscode dbaeumer.vscode-eslint eamodio.gitlens ms-azuretools.vscode-docker; do
+            code --install-extension "$ext" || true
+          done
         fi
       args:
         executable: /bin/bash
+
+    - name: (Optional) Print deployment target
+      debug:
+        msg: "Deployment target configured as {{ DEPLOY_TARGET }}"
+
+  # Example of using vault/lookup for secrets (do NOT store secrets in repo)
+  # To use a token, set it as an environment variable or Ansible vault entry and
+  # access with lookup('env','DEPLOY_TOKEN') or vars_prompt / vault.
