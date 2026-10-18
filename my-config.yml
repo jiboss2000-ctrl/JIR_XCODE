@@ -1,0 +1,25 @@
+---
+# JIR_XCODE configuration (managed file)
+# Versioned and intended to be deployed using Ansible (see ansible/ directory)
+name: JIR Xcode Config
+version: 1.0.0
+schema: v1
+
+models:
+  - title: DeepSeek Coder (Chat)
+    provider: ollama
+    model: deepseek-coder
+
+tabAutocompleteModel:
+  title: DeepSeek Coder (Autocomplete)
+  provider: ollama
+  model: deepseek-coder
+
+customCommands:
+  - name: test
+    prompt: Write a comprehensive suite of unit tests for this code following international best practices.
+  - name: refactor
+    prompt: Refactor this code to ensure it is clean, highly optimized, maintainable, and follows global industry standards.
+
+systemMessage: >-
+  You are an elite senior software engineer. Always write clean, secure, scalable, and production-ready code with proper error handling, following international development standards.
