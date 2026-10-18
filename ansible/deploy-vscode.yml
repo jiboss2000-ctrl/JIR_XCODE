@@ -34,9 +34,6 @@
           FONT_WEIGHT: "{{ lookup('env','FONT_WEIGHT') | default(FONT_WEIGHT) }}"
           THEME_NAME: "{{ lookup('env','THEME_NAME') | default(THEME_NAME) }}"
           THEME_COLORS: {{ lookup('env','THEME_COLORS') | default(THEME_COLORS) }}
-          CODE_STYLE_MAX_LINE_LENGTH: "{{ lookup('env','CODE_STYLE_MAX_LINE_LENGTH') | default(120) }}"
-          CODE_STYLE_NEWLINE: "{{ lookup('env','CODE_STYLE_NEWLINE') | default('\\n') }}"
-          CODE_STYLE_INDENTATION: "{{ lookup('env','CODE_STYLE_INDENTATION') | default(2) }}"
 
     - name: Deploy recommended extensions file
       copy:
@@ -50,7 +47,7 @@
           }
         mode: '0644'
 
-    - name: Install recommended VS Code extensions if the CLI is available
+    - name: (Optional) Install VS Code extensions via code CLI if available
       become: no
       shell: |
         if command -v code >/dev/null 2>&1; then

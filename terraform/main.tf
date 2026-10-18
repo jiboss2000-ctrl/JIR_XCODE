@@ -38,6 +38,5 @@ resource "null_resource" "deploy_vscode_settings" {
     type        = "ssh"
     host        = var.deploy_target
     user        = "${var.deploy_token != "" ? "ubuntu" : "your_username"}"
-    # Replace with your actual SSH credentials and private_key configuration as needed.
   }
 }

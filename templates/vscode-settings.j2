@@ -8,7 +8,7 @@
     "editor.foreground": "{{ env.THEME_COLORS[1] | default('#F8F8F2') }}"
   },
   "editor.rulers": [{{ env.CODE_STYLE_MAX_LINE_LENGTH | default(120) }}],
-  "files.eol": "{{ env.CODE_STYLE_NEWLINE | default('\\n') }}",
+  "files.eol": "{{ env.CODE_STYLE_NEWLINE | default('\n') }}",
   "editor.tabSize": {{ env.CODE_STYLE_INDENTATION | default(2) }},
   "editor.insertSpaces": true
 }
